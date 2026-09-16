@@ -72,11 +72,12 @@ const state = {
 };
 
 function getAttendanceMarks(attPercent) {
-  if (attPercent === null || attPercent === undefined || isNaN(attPercent)) return 0;
-  if (attPercent >= 90) return 5;
-  if (attPercent >= 85) return 4;
-  if (attPercent >= 80) return 3;
-  if (attPercent >= 75) return 2;
+  if (attPercent === null || attPercent === undefined || attPercent === '' || isNaN(parseFloat(attPercent))) return 0;
+  const att = parseFloat(attPercent);
+  if (att >= 90) return 5;
+  if (att >= 85) return 4;
+  if (att >= 80) return 3;
+  if (att >= 75) return 2;
   return 0;
 }
 
@@ -92,9 +93,15 @@ function scoreToGrade(score) {
   return { grade: 'E/F', points: 0, score: Math.max(0, rounded) };
 }
 
+/**
+ * Standard Sem 3 Subject Evaluation
+ * Formula: Score y = Round( (90/5/40)*(CA1+CA2+CA3) + (90/5/60)*(CA4+CA5) + AttendanceMarks, 0 )
+ */
 function calculateStandardSem3Score(ca1, ca2, ca3, ca4, ca5, attPercent) {
-  const inputs = [ca1, ca2, ca3, ca4, ca5, attPercent];
-  const filledCount = inputs.filter(v => v !== '' && v !== null && v !== undefined && !isNaN(parseFloat(v))).length;
+  const rawInputs = [ca1, ca2, ca3, ca4, ca5, attPercent];
+  const filledInputs = rawInputs.filter(v => v !== '' && v !== null && v !== undefined && !isNaN(parseFloat(v)));
+  const filledCount = filledInputs.length;
+  
   if (filledCount === 0) return null;
 
   const nCa1 = parseFloat(ca1) || 0;
@@ -102,19 +109,31 @@ function calculateStandardSem3Score(ca1, ca2, ca3, ca4, ca5, attPercent) {
   const nCa3 = parseFloat(ca3) || 0;
   const nCa4 = parseFloat(ca4) || 0;
   const nCa5 = parseFloat(ca5) || 0;
-  const nAtt = attPercent !== '' && attPercent !== null ? parseFloat(attPercent) : NaN;
+  const hasAtt = attPercent !== '' && attPercent !== null && attPercent !== undefined && !isNaN(parseFloat(attPercent));
+  const attMarks = hasAtt ? getAttendanceMarks(attPercent) : 0;
 
-  const attMarks = isNaN(nAtt) ? 0 : getAttendanceMarks(nAtt);
   const part1 = (90 / 5 / 40) * (nCa1 + nCa2 + nCa3);
   const part2 = (90 / 5 / 60) * (nCa4 + nCa5);
   const totalScore = Math.min(100, Math.max(0, Math.round(part1 + part2 + attMarks)));
 
-  return { score: totalScore, isComplete: filledCount === 6 };
+  const isComplete = filledCount === 6;
+
+  return {
+    score: totalScore,
+    filledCount: filledCount,
+    isComplete: isComplete
+  };
 }
 
+/**
+ * Partner Company Special Subject Evaluation
+ * Formula: Score y = Round( avg(sprint1, sprint2, sprint3)*0.70 + viva, 0 )
+ */
 function calculateSpecialSem3Score(sprint1, sprint2, sprint3, viva) {
-  const inputs = [sprint1, sprint2, sprint3, viva];
-  const filledCount = inputs.filter(v => v !== '' && v !== null && v !== undefined && !isNaN(parseFloat(v))).length;
+  const rawInputs = [sprint1, sprint2, sprint3, viva];
+  const filledInputs = rawInputs.filter(v => v !== '' && v !== null && v !== undefined && !isNaN(parseFloat(v)));
+  const filledCount = filledInputs.length;
+
   if (filledCount === 0) return null;
 
   const s1 = parseFloat(sprint1) || 0;
@@ -126,7 +145,13 @@ function calculateSpecialSem3Score(sprint1, sprint2, sprint3, viva) {
   const sprintPart = sprintAvg * 0.7;
   const totalScore = Math.min(100, Math.max(0, Math.round(sprintPart + v)));
 
-  return { score: totalScore, isComplete: filledCount === 4 };
+  const isComplete = filledCount === 4;
+
+  return {
+    score: totalScore,
+    filledCount: filledCount,
+    isComplete: isComplete
+  };
 }
 
 function renderDropdownSemester(semKey, containerId) {
@@ -174,7 +199,19 @@ function renderSem3() {
       const viva = subState.viva !== undefined ? subState.viva : '';
 
       const calc = calculateSpecialSem3Score(s1, s2, s3, viva);
-      const gradeResult = calc ? scoreToGrade(calc.score) : null;
+      const gradeResult = (calc && calc.isComplete) ? scoreToGrade(calc.score) : null;
+
+      let scoreText = '-';
+      let gradeText = '-';
+      if (calc) {
+        if (calc.isComplete) {
+          scoreText = `${calc.score}/100`;
+          gradeText = `${gradeResult.grade} (${gradeResult.points} pts)`;
+        } else {
+          scoreText = `${calc.score}/100 (${calc.filledCount}/4 filled)`;
+          gradeText = `Fill all 4 fields`;
+        }
+      }
 
       return `
         <div class="subject-card" data-subject-id="${sub.id}">
@@ -211,8 +248,8 @@ function renderSem3() {
           </div>
 
           <div class="card-result-row">
-            <span>Score: <strong class="result-val" id="score_${sub.id}">${calc ? `${calc.score}/100` : '-'}</strong></span>
-            <span>Grade: <strong class="result-val" id="gradeBadge_${sub.id}">${gradeResult ? `${gradeResult.grade} (${gradeResult.points} pts)` : '-'}</strong></span>
+            <span>Score: <strong class="result-val" id="score_${sub.id}">${scoreText}</strong></span>
+            <span>Grade: <strong class="result-val" id="gradeBadge_${sub.id}">${gradeText}</strong></span>
           </div>
         </div>
       `;
@@ -225,7 +262,19 @@ function renderSem3() {
       const att = subState.att !== undefined ? subState.att : '';
 
       const calc = calculateStandardSem3Score(ca1, ca2, ca3, ca4, ca5, att);
-      const gradeResult = calc ? scoreToGrade(calc.score) : null;
+      const gradeResult = (calc && calc.isComplete) ? scoreToGrade(calc.score) : null;
+
+      let scoreText = '-';
+      let gradeText = '-';
+      if (calc) {
+        if (calc.isComplete) {
+          scoreText = `${calc.score}/100`;
+          gradeText = `${gradeResult.grade} (${gradeResult.points} pts)`;
+        } else {
+          scoreText = `${calc.score}/100 (${calc.filledCount}/6 filled)`;
+          gradeText = `Fill all 6 fields`;
+        }
+      }
 
       return `
         <div class="subject-card" data-subject-id="${sub.id}">
@@ -269,13 +318,13 @@ function renderSem3() {
               <label class="input-label" for="inp_${sub.id}_att">Attendance %</label>
               <input type="number" id="inp_${sub.id}_att" class="num-input sem3-input"
                 data-subject="${sub.name}" data-field="att" min="0" max="100" step="any"
-                placeholder="%" value="${att}">
+                placeholder="0-100" value="${att}">
             </div>
           </div>
 
           <div class="card-result-row">
-            <span>Score: <strong class="result-val" id="score_${sub.id}">${calc ? `${calc.score}/100` : '-'}</strong></span>
-            <span>Grade: <strong class="result-val" id="gradeBadge_${sub.id}">${gradeResult ? `${gradeResult.grade} (${gradeResult.points} pts)` : '-'}</strong></span>
+            <span>Score: <strong class="result-val" id="score_${sub.id}">${scoreText}</strong></span>
+            <span>Grade: <strong class="result-val" id="gradeBadge_${sub.id}">${gradeText}</strong></span>
           </div>
         </div>
       `;
@@ -317,10 +366,14 @@ function recalculateAll() {
 
     if (sub.isSpecial) {
       const calc = calculateSpecialSem3Score(subState.sprint1, subState.sprint2, subState.sprint3, subState.viva);
-      if (calc) gradeObj = scoreToGrade(calc.score);
+      if (calc && calc.isComplete) {
+        gradeObj = scoreToGrade(calc.score);
+      }
     } else {
       const calc = calculateStandardSem3Score(subState.ca1, subState.ca2, subState.ca3, subState.ca4, subState.ca5, subState.att);
-      if (calc) gradeObj = scoreToGrade(calc.score);
+      if (calc && calc.isComplete) {
+        gradeObj = scoreToGrade(calc.score);
+      }
     }
 
     if (gradeObj) {
@@ -459,14 +512,34 @@ function setupEventListeners() {
 
         if (isSpecial) {
           const calc = calculateSpecialSem3Score(sState.sprint1, sState.sprint2, sState.sprint3, sState.viva);
-          const gradeResult = calc ? scoreToGrade(calc.score) : null;
-          if (scoreEl) scoreEl.textContent = calc ? `${calc.score}/100` : '-';
-          if (badgeEl) badgeEl.textContent = gradeResult ? `${gradeResult.grade} (${gradeResult.points} pts)` : '-';
+          if (calc) {
+            if (calc.isComplete) {
+              const gradeResult = scoreToGrade(calc.score);
+              if (scoreEl) scoreEl.textContent = `${calc.score}/100`;
+              if (badgeEl) badgeEl.textContent = `${gradeResult.grade} (${gradeResult.points} pts)`;
+            } else {
+              if (scoreEl) scoreEl.textContent = `${calc.score}/100 (${calc.filledCount}/4 filled)`;
+              if (badgeEl) badgeEl.textContent = `Fill all 4 fields`;
+            }
+          } else {
+            if (scoreEl) scoreEl.textContent = '-';
+            if (badgeEl) badgeEl.textContent = '-';
+          }
         } else {
           const calc = calculateStandardSem3Score(sState.ca1, sState.ca2, sState.ca3, sState.ca4, sState.ca5, sState.att);
-          const gradeResult = calc ? scoreToGrade(calc.score) : null;
-          if (scoreEl) scoreEl.textContent = calc ? `${calc.score}/100` : '-';
-          if (badgeEl) badgeEl.textContent = gradeResult ? `${gradeResult.grade} (${gradeResult.points} pts)` : '-';
+          if (calc) {
+            if (calc.isComplete) {
+              const gradeResult = scoreToGrade(calc.score);
+              if (scoreEl) scoreEl.textContent = `${calc.score}/100`;
+              if (badgeEl) badgeEl.textContent = `${gradeResult.grade} (${gradeResult.points} pts)`;
+            } else {
+              if (scoreEl) scoreEl.textContent = `${calc.score}/100 (${calc.filledCount}/6 filled)`;
+              if (badgeEl) badgeEl.textContent = `Fill all 6 fields`;
+            }
+          } else {
+            if (scoreEl) scoreEl.textContent = '-';
+            if (badgeEl) badgeEl.textContent = '-';
+          }
         }
       }
 
