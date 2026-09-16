@@ -95,63 +95,93 @@ function scoreToGrade(score) {
 
 /**
  * Standard Sem 3 Subject Evaluation
- * Formula: Score y = Round( (90/5/40)*(CA1+CA2+CA3) + (90/5/60)*(CA4+CA5) + AttendanceMarks, 0 )
+ * Evaluates immediately on ANY entered field (normalizing proportional weight if partial)
+ * Full formula when complete: Round( (90/5/40)*(CA1+CA2+CA3) + (90/5/60)*(CA4+CA5) + Attendance, 0 )
  */
 function calculateStandardSem3Score(ca1, ca2, ca3, ca4, ca5, attPercent) {
-  const rawInputs = [ca1, ca2, ca3, ca4, ca5, attPercent];
-  const filledInputs = rawInputs.filter(v => v !== '' && v !== null && v !== undefined && !isNaN(parseFloat(v)));
-  const filledCount = filledInputs.length;
-  
-  if (filledCount === 0) return null;
+  const c1 = ca1 !== '' && ca1 !== null && !isNaN(parseFloat(ca1)) ? parseFloat(ca1) : null;
+  const c2 = ca2 !== '' && ca2 !== null && !isNaN(parseFloat(ca2)) ? parseFloat(ca2) : null;
+  const c3 = ca3 !== '' && ca3 !== null && !isNaN(parseFloat(ca3)) ? parseFloat(ca3) : null;
+  const c4 = ca4 !== '' && ca4 !== null && !isNaN(parseFloat(ca4)) ? parseFloat(ca4) : null;
+  const c5 = ca5 !== '' && ca5 !== null && !isNaN(parseFloat(ca5)) ? parseFloat(ca5) : null;
+  const hasAtt = attPercent !== '' && attPercent !== null && !isNaN(parseFloat(attPercent));
+  const attVal = hasAtt ? parseFloat(attPercent) : null;
 
-  const nCa1 = parseFloat(ca1) || 0;
-  const nCa2 = parseFloat(ca2) || 0;
-  const nCa3 = parseFloat(ca3) || 0;
-  const nCa4 = parseFloat(ca4) || 0;
-  const nCa5 = parseFloat(ca5) || 0;
-  const hasAtt = attPercent !== '' && attPercent !== null && attPercent !== undefined && !isNaN(parseFloat(attPercent));
-  const attMarks = hasAtt ? getAttendanceMarks(attPercent) : 0;
+  const enteredList = [c1, c2, c3, c4, c5, attVal].filter(v => v !== null);
+  if (enteredList.length === 0) return null;
 
-  const part1 = (90 / 5 / 40) * (nCa1 + nCa2 + nCa3);
-  const part2 = (90 / 5 / 60) * (nCa4 + nCa5);
-  const totalScore = Math.min(100, Math.max(0, Math.round(part1 + part2 + attMarks)));
+  const isComplete = (c1 !== null && c2 !== null && c3 !== null && c4 !== null && c5 !== null && hasAtt);
 
-  const isComplete = filledCount === 6;
+  if (isComplete) {
+    // Official full formula
+    const attMarks = getAttendanceMarks(attVal);
+    const part1 = (90 / 5 / 40) * (c1 + c2 + c3);
+    const part2 = (90 / 5 / 60) * (c4 + c5);
+    const totalScore = Math.min(100, Math.max(0, Math.round(part1 + part2 + attMarks)));
+    return { score: totalScore, isComplete: true, filledCount: 6 };
+  } else {
+    // Proportional calculation for single or partial fields
+    let earnedWeight = 0;
+    let maxWeight = 0;
 
-  return {
-    score: totalScore,
-    filledCount: filledCount,
-    isComplete: isComplete
-  };
+    if (c1 !== null) { earnedWeight += 0.45 * c1; maxWeight += 18; }
+    if (c2 !== null) { earnedWeight += 0.45 * c2; maxWeight += 18; }
+    if (c3 !== null) { earnedWeight += 0.45 * c3; maxWeight += 18; }
+
+    if (c4 !== null) { earnedWeight += 0.30 * c4; maxWeight += 18; }
+    if (c5 !== null) { earnedWeight += 0.30 * c5; maxWeight += 18; }
+
+    if (hasAtt) {
+      earnedWeight += getAttendanceMarks(attVal);
+      maxWeight += 5;
+    }
+
+    let projectedScore = maxWeight > 0 ? Math.min(100, Math.max(0, Math.round((earnedWeight / maxWeight) * 100))) : 0;
+    return { score: projectedScore, isComplete: false, filledCount: enteredList.length };
+  }
 }
 
 /**
  * Partner Company Special Subject Evaluation
- * Formula: Score y = Round( avg(sprint1, sprint2, sprint3)*0.70 + viva, 0 )
+ * Evaluates immediately on ANY entered sprint or viva
+ * Full formula when complete: Round( avg(sprint1, sprint2, sprint3)*0.70 + viva, 0 )
  */
 function calculateSpecialSem3Score(sprint1, sprint2, sprint3, viva) {
-  const rawInputs = [sprint1, sprint2, sprint3, viva];
-  const filledInputs = rawInputs.filter(v => v !== '' && v !== null && v !== undefined && !isNaN(parseFloat(v)));
-  const filledCount = filledInputs.length;
+  const s1 = sprint1 !== '' && sprint1 !== null && !isNaN(parseFloat(sprint1)) ? parseFloat(sprint1) : null;
+  const s2 = sprint2 !== '' && sprint2 !== null && !isNaN(parseFloat(sprint2)) ? parseFloat(sprint2) : null;
+  const s3 = sprint3 !== '' && sprint3 !== null && !isNaN(parseFloat(sprint3)) ? parseFloat(sprint3) : null;
+  const v = viva !== '' && viva !== null && !isNaN(parseFloat(viva)) ? parseFloat(viva) : null;
 
-  if (filledCount === 0) return null;
+  const enteredSprints = [s1, s2, s3].filter(v => v !== null);
+  const hasViva = (v !== null);
 
-  const s1 = parseFloat(sprint1) || 0;
-  const s2 = parseFloat(sprint2) || 0;
-  const s3 = parseFloat(sprint3) || 0;
-  const v = parseFloat(viva) || 0;
+  if (enteredSprints.length === 0 && !hasViva) return null;
 
-  const sprintAvg = (s1 + s2 + s3) / 3;
-  const sprintPart = sprintAvg * 0.7;
-  const totalScore = Math.min(100, Math.max(0, Math.round(sprintPart + v)));
+  const isComplete = (s1 !== null && s2 !== null && s3 !== null && hasViva);
 
-  const isComplete = filledCount === 4;
+  if (isComplete) {
+    const sprintAvg = (s1 + s2 + s3) / 3;
+    const totalScore = Math.min(100, Math.max(0, Math.round(sprintAvg * 0.7 + v)));
+    return { score: totalScore, isComplete: true, filledCount: 4 };
+  } else {
+    // Proportional calculation for partial fields
+    let earnedWeight = 0;
+    let maxWeight = 0;
 
-  return {
-    score: totalScore,
-    filledCount: filledCount,
-    isComplete: isComplete
-  };
+    if (enteredSprints.length > 0) {
+      const avgEntered = enteredSprints.reduce((a, b) => a + b, 0) / enteredSprints.length;
+      earnedWeight += avgEntered * 0.7;
+      maxWeight += 70;
+    }
+
+    if (hasViva) {
+      earnedWeight += v;
+      maxWeight += 30;
+    }
+
+    let projectedScore = maxWeight > 0 ? Math.min(100, Math.max(0, Math.round((earnedWeight / maxWeight) * 100))) : 0;
+    return { score: projectedScore, isComplete: false, filledCount: enteredSprints.length + (hasViva ? 1 : 0) };
+  }
 }
 
 function renderDropdownSemester(semKey, containerId) {
@@ -199,19 +229,10 @@ function renderSem3() {
       const viva = subState.viva !== undefined ? subState.viva : '';
 
       const calc = calculateSpecialSem3Score(s1, s2, s3, viva);
-      const gradeResult = (calc && calc.isComplete) ? scoreToGrade(calc.score) : null;
+      const gradeResult = calc ? scoreToGrade(calc.score) : null;
 
-      let scoreText = '-';
-      let gradeText = '-';
-      if (calc) {
-        if (calc.isComplete) {
-          scoreText = `${calc.score}/100`;
-          gradeText = `${gradeResult.grade} (${gradeResult.points} pts)`;
-        } else {
-          scoreText = `${calc.score}/100 (${calc.filledCount}/4 filled)`;
-          gradeText = `Fill all 4 fields`;
-        }
-      }
+      let scoreText = calc ? `${calc.score}/100` : '-';
+      let gradeText = gradeResult ? `${gradeResult.grade} (${gradeResult.points} pts)` : '-';
 
       return `
         <div class="subject-card" data-subject-id="${sub.id}">
@@ -262,19 +283,10 @@ function renderSem3() {
       const att = subState.att !== undefined ? subState.att : '';
 
       const calc = calculateStandardSem3Score(ca1, ca2, ca3, ca4, ca5, att);
-      const gradeResult = (calc && calc.isComplete) ? scoreToGrade(calc.score) : null;
+      const gradeResult = calc ? scoreToGrade(calc.score) : null;
 
-      let scoreText = '-';
-      let gradeText = '-';
-      if (calc) {
-        if (calc.isComplete) {
-          scoreText = `${calc.score}/100`;
-          gradeText = `${gradeResult.grade} (${gradeResult.points} pts)`;
-        } else {
-          scoreText = `${calc.score}/100 (${calc.filledCount}/6 filled)`;
-          gradeText = `Fill all 6 fields`;
-        }
-      }
+      let scoreText = calc ? `${calc.score}/100` : '-';
+      let gradeText = gradeResult ? `${gradeResult.grade} (${gradeResult.points} pts)` : '-';
 
       return `
         <div class="subject-card" data-subject-id="${sub.id}">
@@ -318,7 +330,7 @@ function renderSem3() {
               <label class="input-label" for="inp_${sub.id}_att">Attendance %</label>
               <input type="number" id="inp_${sub.id}_att" class="num-input sem3-input"
                 data-subject="${sub.name}" data-field="att" min="0" max="100" step="any"
-                placeholder="0-100" value="${att}">
+                placeholder="%" value="${att}">
             </div>
           </div>
 
@@ -333,9 +345,6 @@ function renderSem3() {
 }
 
 function recalculateAll() {
-  let totalAllWeightedPoints = 0;
-  let totalAllGradedCredits = 0;
-
   // Sem 1
   let sem1Weighted = 0, sem1Credits = 0;
   SEMESTER_DATA.sem1.subjects.forEach(sub => {
@@ -358,7 +367,7 @@ function recalculateAll() {
   });
   const sem2Sgpa = sem2Credits > 0 ? (sem2Weighted / sem2Credits) : null;
 
-  // Sem 3
+  // Sem 3 (Calculates live on even 1 field entered)
   let sem3Weighted = 0, sem3Credits = 0;
   SEMESTER_DATA.sem3.subjects.forEach(sub => {
     const subState = state.sem3[sub.name] || {};
@@ -366,12 +375,12 @@ function recalculateAll() {
 
     if (sub.isSpecial) {
       const calc = calculateSpecialSem3Score(subState.sprint1, subState.sprint2, subState.sprint3, subState.viva);
-      if (calc && calc.isComplete) {
+      if (calc) {
         gradeObj = scoreToGrade(calc.score);
       }
     } else {
       const calc = calculateStandardSem3Score(subState.ca1, subState.ca2, subState.ca3, subState.ca4, subState.ca5, subState.att);
-      if (calc && calc.isComplete) {
+      if (calc) {
         gradeObj = scoreToGrade(calc.score);
       }
     }
@@ -383,15 +392,25 @@ function recalculateAll() {
   });
   const sem3Sgpa = sem3Credits > 0 ? (sem3Weighted / sem3Credits) : null;
 
-  // Overall CGPA
-  totalAllWeightedPoints = sem1Weighted + sem2Weighted + sem3Weighted;
-  totalAllGradedCredits = sem1Credits + sem2Credits + sem3Credits;
-  const overallCgpa = totalAllGradedCredits > 0 ? (totalAllWeightedPoints / totalAllGradedCredits) : null;
+  // Overall CGPA for Sem 1 & Sem 2 (Main display in header)
+  const sem1And2Weighted = sem1Weighted + sem2Weighted;
+  const sem1And2Credits = sem1Credits + sem2Credits;
+  const sem1And2Cgpa = sem1And2Credits > 0 ? (sem1And2Weighted / sem1And2Credits) : null;
 
-  // Update Displays
+  // Overall CGPA across ALL 3 semesters (Sub display in header)
+  const all3Weighted = sem1Weighted + sem2Weighted + sem3Weighted;
+  const all3Credits = sem1Credits + sem2Credits + sem3Credits;
+  const all3Cgpa = all3Credits > 0 ? (all3Weighted / all3Credits) : null;
+
+  // Update Header CGPA Displays
   const cgpaDisplay = document.getElementById('cgpaDisplay');
+  const cgpaAllSemsDisplay = document.getElementById('cgpaAllSemsDisplay');
+
   if (cgpaDisplay) {
-    cgpaDisplay.textContent = overallCgpa !== null ? overallCgpa.toFixed(2) : '0.00';
+    cgpaDisplay.textContent = sem1And2Cgpa !== null ? sem1And2Cgpa.toFixed(2) : '0.00';
+  }
+  if (cgpaAllSemsDisplay) {
+    cgpaAllSemsDisplay.textContent = all3Cgpa !== null ? all3Cgpa.toFixed(2) : '0.00';
   }
 
   // Update Tab Sub-pills
@@ -513,14 +532,9 @@ function setupEventListeners() {
         if (isSpecial) {
           const calc = calculateSpecialSem3Score(sState.sprint1, sState.sprint2, sState.sprint3, sState.viva);
           if (calc) {
-            if (calc.isComplete) {
-              const gradeResult = scoreToGrade(calc.score);
-              if (scoreEl) scoreEl.textContent = `${calc.score}/100`;
-              if (badgeEl) badgeEl.textContent = `${gradeResult.grade} (${gradeResult.points} pts)`;
-            } else {
-              if (scoreEl) scoreEl.textContent = `${calc.score}/100 (${calc.filledCount}/4 filled)`;
-              if (badgeEl) badgeEl.textContent = `Fill all 4 fields`;
-            }
+            const gradeResult = scoreToGrade(calc.score);
+            if (scoreEl) scoreEl.textContent = `${calc.score}/100`;
+            if (badgeEl) badgeEl.textContent = `${gradeResult.grade} (${gradeResult.points} pts)`;
           } else {
             if (scoreEl) scoreEl.textContent = '-';
             if (badgeEl) badgeEl.textContent = '-';
@@ -528,14 +542,9 @@ function setupEventListeners() {
         } else {
           const calc = calculateStandardSem3Score(sState.ca1, sState.ca2, sState.ca3, sState.ca4, sState.ca5, sState.att);
           if (calc) {
-            if (calc.isComplete) {
-              const gradeResult = scoreToGrade(calc.score);
-              if (scoreEl) scoreEl.textContent = `${calc.score}/100`;
-              if (badgeEl) badgeEl.textContent = `${gradeResult.grade} (${gradeResult.points} pts)`;
-            } else {
-              if (scoreEl) scoreEl.textContent = `${calc.score}/100 (${calc.filledCount}/6 filled)`;
-              if (badgeEl) badgeEl.textContent = `Fill all 6 fields`;
-            }
+            const gradeResult = scoreToGrade(calc.score);
+            if (scoreEl) scoreEl.textContent = `${calc.score}/100`;
+            if (badgeEl) badgeEl.textContent = `${gradeResult.grade} (${gradeResult.points} pts)`;
           } else {
             if (scoreEl) scoreEl.textContent = '-';
             if (badgeEl) badgeEl.textContent = '-';
