@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SGPA & CGPA Calculator</title>
+  
+  <!-- Modern Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Ambient Green Background Aura -->
+  <div class="bg-glow-1" aria-hidden="true"></div>
+  <div class="bg-glow-2" aria-hidden="true"></div>
+
+  <div class="app-layout">
+    <!-- Top Sticky Header -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+        </div>
+        <div>
+          <h1 class="brand-title">SGPA Calculator</h1>
+          <p class="brand-sub">Appox. SGPA Finder</p>
+        </div>
+      </div>
+
+      <!-- Simple & Exciting Overall CGPA Text Badge -->
+      <div class="cgpa-badge-wrap">
+        <div class="cgpa-text">
+          <span class="cgpa-label">Overall CGPA:</span>
+          <span id="cgpaDisplay" class="cgpa-value">0.00</span>
+          <span class="cgpa-scale">/ 10</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Navigation & Semester Stats Bar -->
+    <div class="controls-bar">
+      <nav class="tabs-nav" role="tablist" aria-label="Semester Tabs">
+        <button class="tab-btn" id="tabSem1" role="tab" aria-selected="false" data-tab="sem1">
+          <span class="tab-label">Semester 1</span>
+          <span class="tab-sgpa-pill" id="sem1TabSgpa">-</span>
+        </button>
+        <button class="tab-btn" id="tabSem2" role="tab" aria-selected="false" data-tab="sem2">
+          <span class="tab-label">Semester 2</span>
+          <span class="tab-sgpa-pill" id="sem2TabSgpa">-</span>
+        </button>
+        <button class="tab-btn active" id="tabSem3" role="tab" aria-selected="true" data-tab="sem3">
+          <span class="tab-label">Semester 3</span>
+          <span class="tab-sgpa-pill" id="sem3TabSgpa">-</span>
+        </button>
+      </nav>
+
+      <div class="current-sem-card">
+        <span class="current-sem-title" id="currentSemLabel">Semester 3 SGPA</span>
+        <div class="current-sem-score-row">
+          <span class="current-sem-num" id="currentSemSgpaDisplay">0.00</span>
+          <span class="current-sem-unit">/ 10.0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main 100% Width Responsive Content -->
+    <main class="main-content">
+      <!-- Semester 1 -->
+      <section class="tab-panel" id="panelSem1" role="tabpanel" hidden>
+        <div class="subjects-grid" id="sem1SubjectsGrid"></div>
+      </section>
+
+      <!-- Semester 2 -->
+      <section class="tab-panel" id="panelSem2" role="tabpanel" hidden>
+        <div class="subjects-grid" id="sem2SubjectsGrid"></div>
+      </section>
+
+      <!-- Semester 3 (Default Active) -->
+      <section class="tab-panel active" id="panelSem3" role="tabpanel">
+        <div class="subjects-grid" id="sem3SubjectsContainer"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
