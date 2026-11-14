@@ -90,28 +90,50 @@ Attendance contributes up to 5 scaled marks to the final score:
 #### Rule 1: Semester 1 & 2 Standard Grade Selection
 $$\text{SGPA} = \frac{\sum (\text{Subject Credits} \times \text{Grade Points})}{\sum \text{Credits Entered}}$$
 
-#### Rule 2: Semester 3 Standard Subjects (Full Evaluation)
-When CA1, CA2, CA3, CA4, CA5, and Attendance % are all provided:
+#### Rule 2: Semester 3 Standard Subjects (Strict Real-Time Evaluation)
+Each continuous assessment has strict boundary limits:
+- $CA_1, CA_2, CA_3 \in [0, 40]$
+- $CA_4, CA_5 \in [0, 60]$
+- Attendance $\% \in [0, 100]$
+
+Any assessment not yet given or left blank defaults to 0. No optimistic or future projected score is assumed; SGPA and subject scores are strictly computed for the actual marks entered:
 $$\text{Score} = \text{Round}\left( \left(\frac{90}{5 \times 40}\right) \times (CA_1 + CA_2 + CA_3) + \left(\frac{90}{5 \times 60}\right) \times (CA_4 + CA_5) + \text{Attendance Marks} \right)$$
 $$\text{Score} = \min(100, \max(0, \text{Score}))$$
 
-#### Rule 3: Semester 3 Standard Subjects (Proportional / Partial Evaluation)
-If any subset of CA fields or attendance is filled:
-- $CA_1, CA_2, CA_3$: Weight of 0.45 per mark (Max 18 weight per CA)
-- $CA_4, CA_5$: Weight of 0.30 per mark (Max 18 weight per CA)
-- Attendance: Max 5 weight
-$$\text{Projected Score} = \min\left(100, \text{Round}\left(\frac{\text{Earned Weight}}{\text{Max Entered Weight}} \times 100\right)\right)$$
+#### Rule 3: Semester 3 Specialized Subject (*Integrated Work with a Partner Company-I*)
+Curriculum grading for the specialized 8-credit industry partner subject comprises two primary components:
 
-#### Rule 4: Semester 3 Specialized Partner Subject
-For *Integrated Work with a Partner Company-I*:
-- **Full Formula**: 
-  $$\text{Score} = \text{Round}\left(\text{Average}(Sprint_1, Sprint_2, Sprint_3) \times 0.70 + Viva\right)$$
-  *(Where Viva is out of 30 marks)*
-- **Partial Formula**: Normalized proportional evaluation based on entered sprints (70% total weight) and Viva (30% weight).
+1. **Kalvium Continuous Evaluation (Scaled down to 70 Marks)**:
+   - **Attendance (25%)**:
+     $$\text{Attendance Score} = \left(\frac{\text{Slots Present}}{\text{Slots Counted}}\right) \times 25$$
+   - **Worklog Submission (25%)**:
+     $$\text{Worklog Score} = \left(\frac{\text{Days Submitted on Time}}{\text{Days Counted}}\right) \times 25$$
+   - **Kalvium Viva (50%)**:
+     Evaluated across 3 vivas (each out of 25 marks):
+     $$\text{Viva Score} = \left(\frac{Viva_1 + Viva_2 + Viva_3}{3}\right) \times \left(\frac{50}{25}\right) = \left(\frac{Viva_1 + Viva_2 + Viva_3}{3}\right) \times 2$$
+   - **Kalvium Total (out of 100)**:
+     $$\text{Kalvium}_{100} = \text{Attendance Score} + \text{Worklog Score} + \text{Viva Score}$$
+   - **Kalvium Scaled Submission (out of 70)**:
+     $$\text{Kalvium}_{70} = \text{Kalvium}_{100} \times 0.70$$
+
+2. **University Faculty Viva (30 Marks)**:
+   - Evaluated by University Faculty towards the end of the semester: $\text{Uni Viva} \in [0, 30]$.
+
+3. **Final Total Score**:
+   Any unentered parameter defaults to 0 without future projections:
+   $$\text{Final Score} = \min(100, \max(0, \text{Round}(\text{Kalvium}_{70} + \text{Uni Viva})))$$
+
+4. **Working Hours & Form Submission Guidelines (`(i)` Tooltip)**:
+   - **Simulated Work:** 3 hours / slots per day count.
+   - **Internship:** 5 hours / slots per day count.
+   - **Days Counted:** Monday to Friday only (Saturday & Sunday excluded).
+   - **Daily Forms:** The exact same schedule and daily rules apply to daily worklog form submissions.
 
 ### 4.4 Cumulative CGPA Aggregation
-- **Overall CGPA (Sem 1 & 2)**: Primary metric in header computed across completed subjects of Semester 1 and Semester 2.
-- **Cumulative CGPA (All 3 Sems)**: Secondary aggregate metric dynamically updated as Sem 3 scores are entered.
+- **Overall CGPA (Sem 1 & 2)**: Primary metric in header computed across completed subjects of Semester 1 and Semester 2:
+  $$\text{CGPA}_{1,2} = \frac{\text{sem1Weighted} + \text{sem2Weighted}}{\text{sem1Credits} + \text{sem2Credits}}$$
+- **All 3 Sems CGPA**: Cumulative grade point average across all three semesters:
+  $$\text{CGPA}_{\text{All}} = \frac{\text{sem1Weighted} + \text{sem2Weighted} + \text{sem3Weighted}}{\text{sem1Credits} + \text{sem2Credits} + \text{sem3Credits}}$$
 
 ### 4.5 Data Persistence
 - All grade dropdown selections, numeric CA inputs, and active tab preferences are automatically saved to browser `localStorage`.

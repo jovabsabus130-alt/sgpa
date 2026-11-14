@@ -68,7 +68,8 @@ const state = {
   activeTab: 'sem3',
   sem1: {},
   sem2: {},
-  sem3: {}
+  sem3: {},
+  integratedCompact: false
 };
 
 function getAttendanceMarks(attPercent) {
@@ -95,93 +96,115 @@ function scoreToGrade(score) {
 
 /**
  * Standard Sem 3 Subject Evaluation
- * Evaluates immediately on ANY entered field (normalizing proportional weight if partial)
- * Full formula when complete: Round( (90/5/40)*(CA1+CA2+CA3) + (90/5/60)*(CA4+CA5) + Attendance, 0 )
+ * Evaluates strictly for the marks given (unentered CAs default to 0; no future output projections)
+ * Full formula: Round( (90/5/40)*(CA1+CA2+CA3) + (90/5/60)*(CA4+CA5) + Attendance, 0 )
+ * Limits: CA1, CA2, CA3 are [0, 40]; CA4, CA5 are [0, 60]; Attendance is [0, 100]
  */
 function calculateStandardSem3Score(ca1, ca2, ca3, ca4, ca5, attPercent) {
-  const c1 = ca1 !== '' && ca1 !== null && !isNaN(parseFloat(ca1)) ? parseFloat(ca1) : null;
-  const c2 = ca2 !== '' && ca2 !== null && !isNaN(parseFloat(ca2)) ? parseFloat(ca2) : null;
-  const c3 = ca3 !== '' && ca3 !== null && !isNaN(parseFloat(ca3)) ? parseFloat(ca3) : null;
-  const c4 = ca4 !== '' && ca4 !== null && !isNaN(parseFloat(ca4)) ? parseFloat(ca4) : null;
-  const c5 = ca5 !== '' && ca5 !== null && !isNaN(parseFloat(ca5)) ? parseFloat(ca5) : null;
+  const hasC1 = ca1 !== '' && ca1 !== null && !isNaN(parseFloat(ca1));
+  const hasC2 = ca2 !== '' && ca2 !== null && !isNaN(parseFloat(ca2));
+  const hasC3 = ca3 !== '' && ca3 !== null && !isNaN(parseFloat(ca3));
+  const hasC4 = ca4 !== '' && ca4 !== null && !isNaN(parseFloat(ca4));
+  const hasC5 = ca5 !== '' && ca5 !== null && !isNaN(parseFloat(ca5));
   const hasAtt = attPercent !== '' && attPercent !== null && !isNaN(parseFloat(attPercent));
-  const attVal = hasAtt ? parseFloat(attPercent) : null;
 
-  const enteredList = [c1, c2, c3, c4, c5, attVal].filter(v => v !== null);
-  if (enteredList.length === 0) return null;
-
-  const isComplete = (c1 !== null && c2 !== null && c3 !== null && c4 !== null && c5 !== null && hasAtt);
-
-  if (isComplete) {
-    // Official full formula
-    const attMarks = getAttendanceMarks(attVal);
-    const part1 = (90 / 5 / 40) * (c1 + c2 + c3);
-    const part2 = (90 / 5 / 60) * (c4 + c5);
-    const totalScore = Math.min(100, Math.max(0, Math.round(part1 + part2 + attMarks)));
-    return { score: totalScore, isComplete: true, filledCount: 6 };
-  } else {
-    // Proportional calculation for single or partial fields
-    let earnedWeight = 0;
-    let maxWeight = 0;
-
-    if (c1 !== null) { earnedWeight += 0.45 * c1; maxWeight += 18; }
-    if (c2 !== null) { earnedWeight += 0.45 * c2; maxWeight += 18; }
-    if (c3 !== null) { earnedWeight += 0.45 * c3; maxWeight += 18; }
-
-    if (c4 !== null) { earnedWeight += 0.30 * c4; maxWeight += 18; }
-    if (c5 !== null) { earnedWeight += 0.30 * c5; maxWeight += 18; }
-
-    if (hasAtt) {
-      earnedWeight += getAttendanceMarks(attVal);
-      maxWeight += 5;
-    }
-
-    let projectedScore = maxWeight > 0 ? Math.min(100, Math.max(0, Math.round((earnedWeight / maxWeight) * 100))) : 0;
-    return { score: projectedScore, isComplete: false, filledCount: enteredList.length };
+  // If no marks given at all for this subject, return null
+  if (!hasC1 && !hasC2 && !hasC3 && !hasC4 && !hasC5 && !hasAtt) {
+    return null;
   }
+
+  // Any CA not given defaults to 0; enforce min 0 and max limits
+  const c1 = hasC1 ? Math.min(40, Math.max(0, parseFloat(ca1))) : 0;
+  const c2 = hasC2 ? Math.min(40, Math.max(0, parseFloat(ca2))) : 0;
+  const c3 = hasC3 ? Math.min(40, Math.max(0, parseFloat(ca3))) : 0;
+  const c4 = hasC4 ? Math.min(60, Math.max(0, parseFloat(ca4))) : 0;
+  const c5 = hasC5 ? Math.min(60, Math.max(0, parseFloat(ca5))) : 0;
+  const attVal = hasAtt ? Math.min(100, Math.max(0, parseFloat(attPercent))) : 0;
+
+  const attMarks = getAttendanceMarks(attVal);
+  const part1 = (90 / 5 / 40) * (c1 + c2 + c3);
+  const part2 = (90 / 5 / 60) * (c4 + c5);
+  const totalScore = Math.min(100, Math.max(0, Math.round(part1 + part2 + attMarks)));
+
+  return {
+    score: totalScore,
+    isComplete: (hasC1 && hasC2 && hasC3 && hasC4 && hasC5 && hasAtt)
+  };
 }
 
 /**
- * Partner Company Special Subject Evaluation
- * Evaluates immediately on ANY entered sprint or viva
- * Full formula when complete: Round( avg(sprint1, sprint2, sprint3)*0.70 + viva, 0 )
+ * Integrated Work with a Partner Company-I Evaluation
+ * Parameters:
+ * - Attendance (25%): (Slots present / Slots counted) * 25
+ * - Worklog submission (25%): (Days submitted on time / Days counted) * 25
+ * - Viva (50%): ((Viva 1 + Viva 2 + Viva 3) / 3) * (50 / 25)  [each viva max 25]
+ * Sum out of 100 is scaled down to 70 (* 0.7) for Kalvium WI score.
+ * Remaining 30 marks come from University-Faculty Viva (max 30).
+ * Missing fields default to 0; no future projections.
  */
-function calculateSpecialSem3Score(sprint1, sprint2, sprint3, viva) {
-  const s1 = sprint1 !== '' && sprint1 !== null && !isNaN(parseFloat(sprint1)) ? parseFloat(sprint1) : null;
-  const s2 = sprint2 !== '' && sprint2 !== null && !isNaN(parseFloat(sprint2)) ? parseFloat(sprint2) : null;
-  const s3 = sprint3 !== '' && sprint3 !== null && !isNaN(parseFloat(sprint3)) ? parseFloat(sprint3) : null;
-  const v = viva !== '' && viva !== null && !isNaN(parseFloat(viva)) ? parseFloat(viva) : null;
+function calculateSpecialSem3Score(slotsPresent, slotsCounted, daysPresent, daysCounted, viva1, viva2, viva3, uniViva) {
+  const hasSlotsPres = slotsPresent !== '' && slotsPresent !== null && !isNaN(parseFloat(slotsPresent));
+  const hasSlotsCount = slotsCounted !== '' && slotsCounted !== null && !isNaN(parseFloat(slotsCounted));
+  const hasDaysPres = daysPresent !== '' && daysPresent !== null && !isNaN(parseFloat(daysPresent));
+  const hasDaysCount = daysCounted !== '' && daysCounted !== null && !isNaN(parseFloat(daysCounted));
+  const hasViva1 = viva1 !== '' && viva1 !== null && !isNaN(parseFloat(viva1));
+  const hasViva2 = viva2 !== '' && viva2 !== null && !isNaN(parseFloat(viva2));
+  const hasViva3 = viva3 !== '' && viva3 !== null && !isNaN(parseFloat(viva3));
+  const hasUniViva = uniViva !== '' && uniViva !== null && !isNaN(parseFloat(uniViva));
 
-  const enteredSprints = [s1, s2, s3].filter(v => v !== null);
-  const hasViva = (v !== null);
-
-  if (enteredSprints.length === 0 && !hasViva) return null;
-
-  const isComplete = (s1 !== null && s2 !== null && s3 !== null && hasViva);
-
-  if (isComplete) {
-    const sprintAvg = (s1 + s2 + s3) / 3;
-    const totalScore = Math.min(100, Math.max(0, Math.round(sprintAvg * 0.7 + v)));
-    return { score: totalScore, isComplete: true, filledCount: 4 };
-  } else {
-    // Proportional calculation for partial fields
-    let earnedWeight = 0;
-    let maxWeight = 0;
-
-    if (enteredSprints.length > 0) {
-      const avgEntered = enteredSprints.reduce((a, b) => a + b, 0) / enteredSprints.length;
-      earnedWeight += avgEntered * 0.7;
-      maxWeight += 70;
-    }
-
-    if (hasViva) {
-      earnedWeight += v;
-      maxWeight += 30;
-    }
-
-    let projectedScore = maxWeight > 0 ? Math.min(100, Math.max(0, Math.round((earnedWeight / maxWeight) * 100))) : 0;
-    return { score: projectedScore, isComplete: false, filledCount: enteredSprints.length + (hasViva ? 1 : 0) };
+  // If no fields entered at all, return null
+  if (!hasSlotsPres && !hasSlotsCount && !hasDaysPres && !hasDaysCount && !hasViva1 && !hasViva2 && !hasViva3 && !hasUniViva) {
+    return null;
   }
+
+  // Attendance (25%): (Slots present / Slots counted) * 25
+  let attendanceScore = 0;
+  if (hasSlotsPres && hasSlotsCount) {
+    const counted = Math.max(0, parseFloat(slotsCounted));
+    if (counted > 0) {
+      const present = Math.min(counted, Math.max(0, parseFloat(slotsPresent)));
+      attendanceScore = (present / counted) * 25;
+    }
+  }
+
+  // Worklog submission (25%): (Days submitted on time / Days counted) * 25
+  let worklogScore = 0;
+  if (hasDaysPres && hasDaysCount) {
+    const counted = Math.max(0, parseFloat(daysCounted));
+    if (counted > 0) {
+      const present = Math.min(counted, Math.max(0, parseFloat(daysPresent)));
+      worklogScore = (present / counted) * 25;
+    }
+  }
+
+  // Viva (50%): ((Viva 1 + Viva 2 + Viva 3) / 3) * (50 / 25)
+  // Each viva is out of 25 (min 0, max 25). If not given, defaults to 0.
+  const v1 = hasViva1 ? Math.min(25, Math.max(0, parseFloat(viva1))) : 0;
+  const v2 = hasViva2 ? Math.min(25, Math.max(0, parseFloat(viva2))) : 0;
+  const v3 = hasViva3 ? Math.min(25, Math.max(0, parseFloat(viva3))) : 0;
+  const vivaScore = ((v1 + v2 + v3) / 3) * (50 / 25);
+
+  // Kalvium score out of 100
+  const kalvium100 = attendanceScore + worklogScore + vivaScore;
+  // Scaled down to 70
+  const kalvium70 = kalvium100 * 0.7;
+
+  // University-Faculty Viva (30 marks)
+  const uniVivaScore = hasUniViva ? Math.min(30, Math.max(0, parseFloat(uniViva))) : 0;
+
+  // Final Total Score (out of 100)
+  const totalScore = Math.min(100, Math.max(0, Math.round(kalvium70 + uniVivaScore)));
+
+  return {
+    score: totalScore,
+    kalvium100,
+    kalvium70,
+    uniVivaScore,
+    attendanceScore,
+    worklogScore,
+    vivaScore,
+    isComplete: (hasSlotsPres && hasSlotsCount && hasDaysPres && hasDaysCount && hasViva1 && hasViva2 && hasViva3 && hasUniViva)
+  };
 }
 
 function renderDropdownSemester(semKey, containerId) {
@@ -223,48 +246,177 @@ function renderSem3() {
     const subState = state.sem3[sub.name] || {};
 
     if (sub.isSpecial) {
-      const s1 = subState.sprint1 !== undefined ? subState.sprint1 : '';
-      const s2 = subState.sprint2 !== undefined ? subState.sprint2 : '';
-      const s3 = subState.sprint3 !== undefined ? subState.sprint3 : '';
-      const viva = subState.viva !== undefined ? subState.viva : '';
+      const sp = subState.slots_present !== undefined ? subState.slots_present : '';
+      const sc = subState.slots_counted !== undefined ? subState.slots_counted : '';
+      const dp = subState.days_present !== undefined ? subState.days_present : '';
+      const dc = subState.days_counted !== undefined ? subState.days_counted : '';
+      const v1 = subState.viva1 !== undefined ? subState.viva1 : '';
+      const v2 = subState.viva2 !== undefined ? subState.viva2 : '';
+      const v3 = subState.viva3 !== undefined ? subState.viva3 : '';
+      const uniViva = subState.uni_viva !== undefined ? subState.uni_viva : '';
 
-      const calc = calculateSpecialSem3Score(s1, s2, s3, viva);
+      const calc = calculateSpecialSem3Score(sp, sc, dp, dc, v1, v2, v3, uniViva);
       const gradeResult = calc ? scoreToGrade(calc.score) : null;
 
       let scoreText = calc ? `${calc.score}/100` : '-';
       let gradeText = gradeResult ? `${gradeResult.grade} (${gradeResult.points} pts)` : '-';
+      let kalviumBadge = calc ? `${calc.kalvium70.toFixed(1)} / 70` : '- / 70';
+      let uniBadge = calc ? `${calc.uniVivaScore.toFixed(0)} / 30` : '- / 30';
+
+      const FILTER_QUERY = 'subject:Thanks for filling in this form: Simulated Work Daily Journal Form effective 13th March 2026';
+
+      const attendanceTooltip = `
+        <span class="info-tooltip-wrap">
+          <button type="button" class="info-icon-btn btn-open-guidelines" aria-label="Open Attendance Slot Guidelines" title="Click for full guidelines window">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+          </button>
+          <span class="info-tooltip-box" role="tooltip">
+            <strong class="tooltip-title">Attendance Slot Rules:</strong>
+            <span class="tooltip-item">• <strong>Simulated Work:</strong> 3 hours a day</span>
+            <span class="tooltip-item">• <strong>Internship:</strong> 5 hours a day</span>
+            <span class="tooltip-item">• <strong>Mon–Fri only</strong> (Sat & Sun excluded)</span>
+            <span class="tooltip-copy-hint">(Click icon for full dialog)</span>
+          </span>
+        </span>
+      `;
+
+      const worklogTooltip = `
+        <span class="info-tooltip-wrap">
+          <button type="button" class="info-icon-btn btn-open-guidelines" aria-label="Open Worklog Guidelines & Search Filter" title="Click for full guidelines window">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+          </button>
+          <span class="info-tooltip-box" role="tooltip">
+            <strong class="tooltip-title">Daily Worklog Form Rules:</strong>
+            <span class="tooltip-item">• <strong>Limit:</strong> 1 form per day (Mon–Fri only)</span>
+            <span class="tooltip-item">• <strong>Email Search Filter:</strong></span>
+            <code class="tooltip-filter-chip">${FILTER_QUERY}</code>
+            <span class="tooltip-copy-hint">(Click icon for full dialog & copy)</span>
+          </span>
+        </span>
+      `;
+
+      const generalTooltip = `
+        <span class="info-tooltip-wrap">
+          <button type="button" class="info-icon-btn btn-open-guidelines" aria-label="Open Work & Form Guidelines" title="Click for full guidelines window">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+          </button>
+          <span class="info-tooltip-box" role="tooltip">
+            <strong class="tooltip-title">Work & Daily Form Rules:</strong>
+            <span class="tooltip-item">• <strong>Simulated:</strong> 3 hrs/day | <strong>Internship:</strong> 5 hrs/day</span>
+            <span class="tooltip-item">• Mon–Fri only (Sat & Sun excluded)</span>
+            <span class="tooltip-item">• 1 form per day counted</span>
+            <span class="tooltip-copy-hint">(Click icon for full dialog)</span>
+          </span>
+        </span>
+      `;
 
       return `
-        <div class="subject-card" data-subject-id="${sub.id}">
+        <div class="subject-card special-card" data-subject-id="${sub.id}" id="specialCard_${sub.id}">
           <div class="card-header">
-            <span class="subject-name">${sub.name}</span>
+            <div>
+              <div class="subject-title-row">
+                <span class="subject-name">${sub.name}</span>
+                <span class="info-tooltip-wrap">
+                  <button type="button" class="info-icon-btn btn-open-guidelines" aria-label="Open Work & Journal Guidelines Dialog" title="Click to view full guidelines dialog & search filter">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="16" x2="12" y2="12"></line>
+                      <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                  </button>
+                  <span class="info-tooltip-box" role="tooltip">
+                    <strong class="tooltip-title">Work & Journal Guidelines:</strong>
+                    <span class="tooltip-item">• <strong>Simulated:</strong> 3 hrs/day | <strong>Internship:</strong> 5 hrs/day</span>
+                    <span class="tooltip-item">• <strong>Mon–Fri only</strong> (Sat & Sun excluded)</span>
+                    <span class="tooltip-item">• <strong>Forms:</strong> 1 per day counted</span>
+                    <span class="tooltip-copy-hint">(Click icon for full dialog & filter copy)</span>
+                  </span>
+                </span>
+              </div>
+              <div class="special-subtitle">Kalvium WI (70%) + University Faculty Viva (30%)</div>
+            </div>
             <span class="credits-badge">${sub.credits} Credits</span>
           </div>
 
-          <div class="inputs-grid">
-            <div class="input-box">
-              <label class="input-label" for="inp_${sub.id}_s1">Sprint 1</label>
-              <input type="number" id="inp_${sub.id}_s1" class="num-input sem3-input"
-                data-subject="${sub.name}" data-field="sprint1" min="0" max="100" step="any"
-                placeholder="0-100" value="${s1}">
+          <div class="special-sections-wrap">
+            <!-- Kalvium Component -->
+            <div class="special-section">
+              <div class="special-section-header">
+                <span class="special-section-title">Kalvium Component (Scaled to 70) ${generalTooltip}</span>
+                <span class="special-section-meta" id="meta_kalvium_${sub.id}">Kalvium: ${kalviumBadge}</span>
+              </div>
+              <div class="inputs-grid">
+                <div class="input-box">
+                  <label class="input-label" for="inp_${sub.id}_sp">Slots Present</label>
+                  <input type="number" id="inp_${sub.id}_sp" class="num-input sem3-input"
+                    data-subject="${sub.name}" data-field="slots_present" min="0" step="any"
+                    placeholder="Present" value="${sp}">
+                </div>
+                <div class="input-box">
+                  <label class="input-label" for="inp_${sub.id}_sc">Slots Counted ${attendanceTooltip}</label>
+                  <input type="number" id="inp_${sub.id}_sc" class="num-input sem3-input"
+                    data-subject="${sub.name}" data-field="slots_counted" min="0" step="any"
+                    placeholder="Counted" value="${sc}">
+                </div>
+                <div class="input-box">
+                  <label class="input-label" for="inp_${sub.id}_dp">Logs On-Time ${worklogTooltip}</label>
+                  <input type="number" id="inp_${sub.id}_dp" class="num-input sem3-input"
+                    data-subject="${sub.name}" data-field="days_present" min="0" step="any"
+                    placeholder="On-time" value="${dp}">
+                </div>
+                <div class="input-box">
+                  <label class="input-label" for="inp_${sub.id}_dc">Logs Counted ${worklogTooltip}</label>
+                  <input type="number" id="inp_${sub.id}_dc" class="num-input sem3-input"
+                    data-subject="${sub.name}" data-field="days_counted" min="0" step="any"
+                    placeholder="Counted" value="${dc}">
+                </div>
+                <div class="input-box">
+                  <label class="input-label" for="inp_${sub.id}_v1">Viva 1 (/25)</label>
+                  <input type="number" id="inp_${sub.id}_v1" class="num-input sem3-input"
+                    data-subject="${sub.name}" data-field="viva1" min="0" max="25" step="any"
+                    placeholder="0-25" value="${v1}">
+                </div>
+                <div class="input-box">
+                  <label class="input-label" for="inp_${sub.id}_v2">Viva 2 (/25)</label>
+                  <input type="number" id="inp_${sub.id}_v2" class="num-input sem3-input"
+                    data-subject="${sub.name}" data-field="viva2" min="0" max="25" step="any"
+                    placeholder="0-25" value="${v2}">
+                </div>
+                <div class="input-box">
+                  <label class="input-label" for="inp_${sub.id}_v3">Viva 3 (/25)</label>
+                  <input type="number" id="inp_${sub.id}_v3" class="num-input sem3-input"
+                    data-subject="${sub.name}" data-field="viva3" min="0" max="25" step="any"
+                    placeholder="0-25" value="${v3}">
+                </div>
+              </div>
             </div>
-            <div class="input-box">
-              <label class="input-label" for="inp_${sub.id}_s2">Sprint 2</label>
-              <input type="number" id="inp_${sub.id}_s2" class="num-input sem3-input"
-                data-subject="${sub.name}" data-field="sprint2" min="0" max="100" step="any"
-                placeholder="0-100" value="${s2}">
-            </div>
-            <div class="input-box">
-              <label class="input-label" for="inp_${sub.id}_s3">Sprint 3</label>
-              <input type="number" id="inp_${sub.id}_s3" class="num-input sem3-input"
-                data-subject="${sub.name}" data-field="sprint3" min="0" max="100" step="any"
-                placeholder="0-100" value="${s3}">
-            </div>
-            <div class="input-box">
-              <label class="input-label" for="inp_${sub.id}_viva">Viva (/30)</label>
-              <input type="number" id="inp_${sub.id}_viva" class="num-input sem3-input"
-                data-subject="${sub.name}" data-field="viva" min="0" max="30" step="any"
-                placeholder="0-30" value="${viva}">
+
+            <!-- University Faculty Viva Component -->
+            <div class="special-section">
+              <div class="special-section-header">
+                <span class="special-section-title">University Faculty Viva (30 Marks)</span>
+                <span class="special-section-meta" id="meta_uni_${sub.id}">Uni: ${uniBadge}</span>
+              </div>
+              <div class="inputs-grid" style="grid-template-columns: minmax(130px, 200px);">
+                <div class="input-box">
+                  <label class="input-label" for="inp_${sub.id}_univiva">Faculty Viva (/30)</label>
+                  <input type="number" id="inp_${sub.id}_univiva" class="num-input sem3-input"
+                    data-subject="${sub.name}" data-field="uni_viva" min="0" max="30" step="any"
+                    placeholder="0-30" value="${uniViva}">
+                </div>
+              </div>
             </div>
           </div>
 
@@ -297,40 +449,40 @@ function renderSem3() {
 
           <div class="inputs-grid">
             <div class="input-box">
-              <label class="input-label" for="inp_${sub.id}_ca1">CA 1</label>
+              <label class="input-label" for="inp_${sub.id}_ca1">CA 1 (/40)</label>
               <input type="number" id="inp_${sub.id}_ca1" class="num-input sem3-input"
-                data-subject="${sub.name}" data-field="ca1" step="any" min="0"
-                placeholder="Marks" value="${ca1}">
+                data-subject="${sub.name}" data-field="ca1" step="any" min="0" max="40"
+                placeholder="0-40" value="${ca1}">
             </div>
             <div class="input-box">
-              <label class="input-label" for="inp_${sub.id}_ca2">CA 2</label>
+              <label class="input-label" for="inp_${sub.id}_ca2">CA 2 (/40)</label>
               <input type="number" id="inp_${sub.id}_ca2" class="num-input sem3-input"
-                data-subject="${sub.name}" data-field="ca2" step="any" min="0"
-                placeholder="Marks" value="${ca2}">
+                data-subject="${sub.name}" data-field="ca2" step="any" min="0" max="40"
+                placeholder="0-40" value="${ca2}">
             </div>
             <div class="input-box">
-              <label class="input-label" for="inp_${sub.id}_ca3">CA 3</label>
+              <label class="input-label" for="inp_${sub.id}_ca3">CA 3 (/40)</label>
               <input type="number" id="inp_${sub.id}_ca3" class="num-input sem3-input"
-                data-subject="${sub.name}" data-field="ca3" step="any" min="0"
-                placeholder="Marks" value="${ca3}">
+                data-subject="${sub.name}" data-field="ca3" step="any" min="0" max="40"
+                placeholder="0-40" value="${ca3}">
             </div>
             <div class="input-box">
-              <label class="input-label" for="inp_${sub.id}_ca4">CA 4</label>
+              <label class="input-label" for="inp_${sub.id}_ca4">CA 4 (/60)</label>
               <input type="number" id="inp_${sub.id}_ca4" class="num-input sem3-input"
-                data-subject="${sub.name}" data-field="ca4" step="any" min="0"
-                placeholder="Marks" value="${ca4}">
+                data-subject="${sub.name}" data-field="ca4" step="any" min="0" max="60"
+                placeholder="0-60" value="${ca4}">
             </div>
             <div class="input-box">
-              <label class="input-label" for="inp_${sub.id}_ca5">CA 5</label>
+              <label class="input-label" for="inp_${sub.id}_ca5">CA 5 (/60)</label>
               <input type="number" id="inp_${sub.id}_ca5" class="num-input sem3-input"
-                data-subject="${sub.name}" data-field="ca5" step="any" min="0"
-                placeholder="Marks" value="${ca5}">
+                data-subject="${sub.name}" data-field="ca5" step="any" min="0" max="60"
+                placeholder="0-60" value="${ca5}">
             </div>
             <div class="input-box">
               <label class="input-label" for="inp_${sub.id}_att">Attendance %</label>
               <input type="number" id="inp_${sub.id}_att" class="num-input sem3-input"
                 data-subject="${sub.name}" data-field="att" min="0" max="100" step="any"
-                placeholder="%" value="${att}">
+                placeholder="0-100%" value="${att}">
             </div>
           </div>
 
@@ -345,62 +497,79 @@ function renderSem3() {
 }
 
 function recalculateAll() {
-  // Sem 1
-  let sem1Weighted = 0, sem1Credits = 0;
+  const sem1TotalCredits = SEMESTER_DATA.sem1.totalCredits; // 26
+  const sem2TotalCredits = SEMESTER_DATA.sem2.totalCredits; // 20
+  const sem3TotalCredits = SEMESTER_DATA.sem3.totalCredits; // 22
+  const sem1And2TotalCredits = sem1TotalCredits + sem2TotalCredits; // 46
+  const all3TotalCredits = sem1TotalCredits + sem2TotalCredits + sem3TotalCredits; // 68
+
+  // Sem 1 (Evaluates across full 26 credits)
+  let sem1Weighted = 0;
+  let hasAnySem1 = false;
   SEMESTER_DATA.sem1.subjects.forEach(sub => {
     const grade = state.sem1[sub.name];
     if (grade && GRADE_POINTS_MAP[grade] !== undefined) {
       sem1Weighted += sub.credits * GRADE_POINTS_MAP[grade];
-      sem1Credits += sub.credits;
+      hasAnySem1 = true;
     }
   });
-  const sem1Sgpa = sem1Credits > 0 ? (sem1Weighted / sem1Credits) : null;
+  const sem1Sgpa = hasAnySem1 ? (sem1Weighted / sem1TotalCredits) : null;
 
-  // Sem 2
-  let sem2Weighted = 0, sem2Credits = 0;
+  // Sem 2 (Evaluates across full 20 credits)
+  let sem2Weighted = 0;
+  let hasAnySem2 = false;
   SEMESTER_DATA.sem2.subjects.forEach(sub => {
     const grade = state.sem2[sub.name];
     if (grade && GRADE_POINTS_MAP[grade] !== undefined) {
       sem2Weighted += sub.credits * GRADE_POINTS_MAP[grade];
-      sem2Credits += sub.credits;
+      hasAnySem2 = true;
     }
   });
-  const sem2Sgpa = sem2Credits > 0 ? (sem2Weighted / sem2Credits) : null;
+  const sem2Sgpa = hasAnySem2 ? (sem2Weighted / sem2TotalCredits) : null;
 
-  // Sem 3 (Calculates live on even 1 field entered)
-  let sem3Weighted = 0, sem3Credits = 0;
+  // Sem 3 (Evaluates live across full 22 credits; unentered subjects/CAs default to 0)
+  let sem3Weighted = 0;
+  let hasAnySem3 = false;
   SEMESTER_DATA.sem3.subjects.forEach(sub => {
     const subState = state.sem3[sub.name] || {};
     let gradeObj = null;
 
     if (sub.isSpecial) {
-      const calc = calculateSpecialSem3Score(subState.sprint1, subState.sprint2, subState.sprint3, subState.viva);
+      const calc = calculateSpecialSem3Score(
+        subState.slots_present, subState.slots_counted,
+        subState.days_present, subState.days_counted,
+        subState.viva1, subState.viva2, subState.viva3,
+        subState.uni_viva
+      );
       if (calc) {
         gradeObj = scoreToGrade(calc.score);
+        hasAnySem3 = true;
       }
     } else {
-      const calc = calculateStandardSem3Score(subState.ca1, subState.ca2, subState.ca3, subState.ca4, subState.ca5, subState.att);
+      const calc = calculateStandardSem3Score(
+        subState.ca1, subState.ca2, subState.ca3, subState.ca4, subState.ca5, subState.att
+      );
       if (calc) {
         gradeObj = scoreToGrade(calc.score);
+        hasAnySem3 = true;
       }
     }
 
     if (gradeObj) {
       sem3Weighted += sub.credits * gradeObj.points;
-      sem3Credits += sub.credits;
     }
   });
-  const sem3Sgpa = sem3Credits > 0 ? (sem3Weighted / sem3Credits) : null;
+  const sem3Sgpa = hasAnySem3 ? (sem3Weighted / sem3TotalCredits) : null;
 
-  // Overall CGPA for Sem 1 & Sem 2 (Main display in header)
+  // Overall CGPA for Sem 1 & Sem 2 (Main display in header, across full 46 credits)
+  const hasAnySem1Or2 = hasAnySem1 || hasAnySem2;
   const sem1And2Weighted = sem1Weighted + sem2Weighted;
-  const sem1And2Credits = sem1Credits + sem2Credits;
-  const sem1And2Cgpa = sem1And2Credits > 0 ? (sem1And2Weighted / sem1And2Credits) : null;
+  const sem1And2Cgpa = hasAnySem1Or2 ? (sem1And2Weighted / sem1And2TotalCredits) : null;
 
-  // Overall CGPA across ALL 3 semesters (Sub display in header)
+  // Overall CGPA across ALL 3 semesters (Sub display in header, across full 68 credits)
+  const hasAnyAll3 = hasAnySem1 || hasAnySem2 || hasAnySem3;
   const all3Weighted = sem1Weighted + sem2Weighted + sem3Weighted;
-  const all3Credits = sem1Credits + sem2Credits + sem3Credits;
-  const all3Cgpa = all3Credits > 0 ? (all3Weighted / all3Credits) : null;
+  const all3Cgpa = hasAnyAll3 ? (all3Weighted / all3TotalCredits) : null;
 
   // Update Header CGPA Displays
   const cgpaDisplay = document.getElementById('cgpaDisplay');
@@ -441,6 +610,7 @@ function saveToLocalStorage() {
     localStorage.setItem('sgpa_sem2', JSON.stringify(state.sem2));
     localStorage.setItem('sgpa_sem3', JSON.stringify(state.sem3));
     localStorage.setItem('sgpa_active_tab', state.activeTab);
+    localStorage.setItem('sgpa_integrated_compact', state.integratedCompact ? 'true' : 'false');
   } catch (e) {
     console.error('Error saving to localStorage:', e);
   }
@@ -452,11 +622,23 @@ function loadFromLocalStorage() {
     const s2 = localStorage.getItem('sgpa_sem2');
     const s3 = localStorage.getItem('sgpa_sem3');
     const savedTab = localStorage.getItem('sgpa_active_tab');
+    const savedCompact = localStorage.getItem('sgpa_integrated_compact');
 
     if (s1) state.sem1 = JSON.parse(s1);
     if (s2) state.sem2 = JSON.parse(s2);
-    if (s3) state.sem3 = JSON.parse(s3);
+    if (s3) {
+      state.sem3 = JSON.parse(s3);
+      // Clean up legacy sprint keys if present
+      const specialObj = state.sem3['Integrated Work with a Partner Company-I'];
+      if (specialObj && (specialObj.sprint1 !== undefined || specialObj.sprint2 !== undefined || specialObj.sprint3 !== undefined)) {
+        delete specialObj.sprint1;
+        delete specialObj.sprint2;
+        delete specialObj.sprint3;
+        delete specialObj.viva;
+      }
+    }
     if (savedTab) state.activeTab = savedTab;
+    if (savedCompact !== null) state.integratedCompact = (savedCompact === 'true');
   } catch (e) {
     console.error('Error loading from localStorage:', e);
   }
@@ -508,6 +690,25 @@ function setupEventListeners() {
 
       recalculateAll();
     }
+
+    // Input boundary clamping on change/blur
+    if (e.target.matches('.sem3-input')) {
+      const input = e.target;
+      const min = input.min !== '' ? parseFloat(input.min) : null;
+      const max = input.max !== '' ? parseFloat(input.max) : null;
+      if (input.value !== '' && !isNaN(parseFloat(input.value))) {
+        let val = parseFloat(input.value);
+        if (min !== null && val < min) val = min;
+        if (max !== null && val > max) val = max;
+        if (parseFloat(input.value) !== val) {
+          input.value = val;
+          const subject = input.dataset.subject;
+          const field = input.dataset.field;
+          state.sem3[subject][field] = val.toString();
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
+    }
   });
 
   document.addEventListener('input', (e) => {
@@ -530,14 +731,26 @@ function setupEventListeners() {
         const sState = state.sem3[subject] || {};
 
         if (isSpecial) {
-          const calc = calculateSpecialSem3Score(sState.sprint1, sState.sprint2, sState.sprint3, sState.viva);
+          const calc = calculateSpecialSem3Score(
+            sState.slots_present, sState.slots_counted,
+            sState.days_present, sState.days_counted,
+            sState.viva1, sState.viva2, sState.viva3,
+            sState.uni_viva
+          );
+          const metaKalviumEl = document.getElementById(`meta_kalvium_${subId}`);
+          const metaUniEl = document.getElementById(`meta_uni_${subId}`);
+
           if (calc) {
             const gradeResult = scoreToGrade(calc.score);
             if (scoreEl) scoreEl.textContent = `${calc.score}/100`;
             if (badgeEl) badgeEl.textContent = `${gradeResult.grade} (${gradeResult.points} pts)`;
+            if (metaKalviumEl) metaKalviumEl.textContent = `Kalvium: ${calc.kalvium70.toFixed(1)} / 70`;
+            if (metaUniEl) metaUniEl.textContent = `Uni: ${calc.uniVivaScore.toFixed(0)} / 30`;
           } else {
             if (scoreEl) scoreEl.textContent = '-';
             if (badgeEl) badgeEl.textContent = '-';
+            if (metaKalviumEl) metaKalviumEl.textContent = 'Kalvium: - / 70';
+            if (metaUniEl) metaUniEl.textContent = 'Uni: - / 30';
           }
         } else {
           const calc = calculateStandardSem3Score(sState.ca1, sState.ca2, sState.ca3, sState.ca4, sState.ca5, sState.att);
@@ -555,6 +768,145 @@ function setupEventListeners() {
       recalculateAll();
     }
   });
+
+  // Modal open / close handlers and copy filter handlers
+  document.addEventListener('click', (e) => {
+    // Open Guidelines Modal
+    const openBtn = e.target.closest('.btn-open-guidelines');
+    if (openBtn) {
+      e.preventDefault();
+      openGuidelinesModal();
+      return;
+    }
+
+    // Close Guidelines Modal
+    const closeBtn = e.target.closest('#closeModalBtn, #modalGotItBtn');
+    if (closeBtn) {
+      e.preventDefault();
+      closeGuidelinesModal();
+      return;
+    }
+
+    const modalBackdrop = document.getElementById('guidelinesModal');
+    if (e.target === modalBackdrop) {
+      closeGuidelinesModal();
+      return;
+    }
+
+    // Toggle Compact Mode for Integrated Subject
+    const toggleCompactBtn = e.target.closest('#btnToggleCompact');
+    if (toggleCompactBtn) {
+      e.preventDefault();
+      toggleIntegratedCompact();
+      return;
+    }
+
+    // Copy Filter Buttons
+    const copyBtn = e.target.closest('.copy-query-pill, #copyFilterBtn');
+    if (copyBtn) {
+      e.preventDefault();
+      const query = copyBtn.dataset.query || 'subject:Thanks for filling in this form: Simulated Work Daily Journal Form effective 13th March 2026';
+      copyTextToClipboard(query, copyBtn);
+      return;
+    }
+
+    // Direct click on code chips
+    const codeChip = e.target.closest('.tooltip-filter-chip, .inline-filter-code, .modal-filter-code');
+    if (codeChip) {
+      const text = codeChip.textContent.trim();
+      const associatedBtn = codeChip.closest('.pg-filter-box, .modal-code-wrap')?.querySelector('button');
+      copyTextToClipboard(text, associatedBtn);
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeGuidelinesModal();
+    }
+  });
+}
+
+function toggleIntegratedCompact() {
+  state.integratedCompact = !state.integratedCompact;
+  saveToLocalStorage();
+  const card = document.querySelector('.subject-card.special-card');
+  const guidelinesCard = document.getElementById('guidelinesCard');
+  const btn = document.getElementById('btnToggleCompact');
+  if (card) {
+    card.classList.toggle('is-compact', state.integratedCompact);
+  }
+  if (guidelinesCard) {
+    guidelinesCard.classList.toggle('is-compact', state.integratedCompact);
+  }
+  if (btn) {
+    btn.setAttribute('title', state.integratedCompact ? 'Expand to standard view' : 'Make integrated more compact');
+    btn.innerHTML = `
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        ${state.integratedCompact
+          ? '<polyline points="6 9 12 15 18 9"></polyline>'
+          : '<polyline points="18 15 12 9 6 15"></polyline>'}
+      </svg>
+      <span id="compactBtnText">${state.integratedCompact ? 'Expand' : 'Compact'}</span>
+    `;
+  }
+}
+
+function openGuidelinesModal() {
+  const modal = document.getElementById('guidelinesModal');
+  if (modal) {
+    modal.removeAttribute('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function closeGuidelinesModal() {
+  const modal = document.getElementById('guidelinesModal');
+  if (modal) {
+    modal.setAttribute('hidden', '');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+  }
+}
+
+function copyTextToClipboard(text, triggerBtn) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(showSuccess).catch(() => fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
+  }
+
+  function fallbackCopy(str) {
+    const ta = document.createElement('textarea');
+    ta.value = str;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      showSuccess();
+    } catch (err) {
+      console.error('Copy failed', err);
+    }
+    document.body.removeChild(ta);
+  }
+
+  function showSuccess() {
+    if (!triggerBtn) return;
+    const originalHtml = triggerBtn.innerHTML;
+    triggerBtn.classList.add('copied');
+    triggerBtn.innerHTML = `
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+      <span>Copied!</span>
+    `;
+    setTimeout(() => {
+      triggerBtn.classList.remove('copied');
+      triggerBtn.innerHTML = originalHtml;
+    }, 2000);
+  }
 }
 
 function init() {

@@ -89,8 +89,8 @@ const state = {
     // [subjectName: string]: 'O' | 'A+' | 'A' | 'B+' | 'B' | 'C' | 'D' | 'E/F' | ''
   },
   sem3: {
-    // Standard subject: { ca1?: string|number, ca2?: string|number, ca3?: string|number, ca4?: string|number, ca5?: string|number, att?: string|number }
-    // Special subject:  { sprint1?: string|number, sprint2?: string|number, sprint3?: string|number, viva?: string|number }
+    // Standard subject: { ca1?: string, ca2?: string, ca3?: string, ca4?: string, ca5?: string, att?: string }
+    // Special subject:  { slots_present?: string, slots_counted?: string, days_present?: string, days_counted?: string, viva1?: string, viva2?: string, viva3?: string, uni_viva?: string }
   }
 };
 ```
@@ -160,31 +160,30 @@ flowchart TD
 
 ### 2.3 `calculateStandardSem3Score(ca1, ca2, ca3, ca4, ca5, attPercent)`
 - **Input:** 6 numeric/string parameters for CA1–CA5 marks and attendance percentage.
-- **Output:** `{ score: number, isComplete: boolean, filledCount: number } | null`
+- **Output:** `{ score: number, isComplete: boolean } | null`
 - **Logic:**
-  - **Parsing:** Filter non-null, non-empty, valid numerical inputs. If count is 0, return `null`.
-  - **Complete Branch ($N = 6$ fields entered):**
+  - If all parameters are empty/unprovided, return `null`.
+  - Missing parameters default to 0.
+  - Limits enforced: $CA_1, CA_2, CA_3 \in [0, 40]$, $CA_4, CA_5 \in [0, 60]$, Attendance $\in [0, 100]$.
+  - Strict calculation for given marks (no optimistic/future projected output):
     $$\text{part1} = \left(\frac{90}{5 \times 40}\right) \times (c_1 + c_2 + c_3) = 0.45 \times (c_1 + c_2 + c_3)$$
     $$\text{part2} = \left(\frac{90}{5 \times 60}\right) \times (c_4 + c_5) = 0.30 \times (c_4 + c_5)$$
     $$\text{totalScore} = \min(100, \max(0, \text{Round}(\text{part1} + \text{part2} + \text{attMarks})))$$
-  - **Partial Branch ($1 \le N < 6$ fields entered):**
-    - Accumulates `earnedWeight` and `maxWeight` based on provided fields ($c_1, c_2, c_3 \rightarrow \text{max } 18$ each; $c_4, c_5 \rightarrow \text{max } 18$ each; Attendance $\rightarrow \text{max } 5$).
-    - Projects score:
-      $$\text{projectedScore} = \min\left(100, \max\left(0, \text{Round}\left(\frac{\text{earnedWeight}}{\text{maxWeight}} \times 100\right)\right)\right)$$
 
 ---
 
-### 2.4 `calculateSpecialSem3Score(sprint1, sprint2, sprint3, viva)`
-- **Input:** 4 numeric/string parameters for Sprint 1, 2, 3 (out of 100) and Viva (out of 30).
-- **Output:** `{ score: number, isComplete: boolean, filledCount: number } | null`
+### 2.4 `calculateSpecialSem3Score(slotsPresent, slotsCounted, daysPresent, daysCounted, viva1, viva2, viva3, uniViva)`
+- **Input:** 8 numeric/string parameters for Partner Company continuous evaluation and university faculty viva.
+- **Output:** `{ score, kalvium100, kalvium70, uniVivaScore, attendanceScore, worklogScore, vivaScore, isComplete } | null`
 - **Logic:**
-  - **Complete Branch (3 sprints + Viva):**
-    $$\text{sprintAvg} = \frac{s_1 + s_2 + s_3}{3}$$
-    $$\text{totalScore} = \min(100, \max(0, \text{Round}(\text{sprintAvg} \times 0.70 + viva)))$$
-  - **Partial Branch:**
-    - Sprint weight pool: 70 max weight allocated proportionally to entered sprints.
-    - Viva weight pool: 30 max weight.
-    - Projected score normalized to 100%.
+  - If all parameters are empty/unprovided, return `null`.
+  - Missing parameters default to 0; no future projections:
+    $$\text{attendanceScore} = \left(\frac{\text{slotsPresent}}{\text{slotsCounted}}\right) \times 25 \quad (\text{if } \text{slotsCounted} > 0)$$
+    $$\text{worklogScore} = \left(\frac{\text{daysPresent}}{\text{daysCounted}}\right) \times 25 \quad (\text{if } \text{daysCounted} > 0)$$
+    $$\text{vivaScore} = \left(\frac{v_1 + v_2 + v_3}{3}\right) \times \left(\frac{50}{25}\right) \quad (v_i \in [0, 25])$$
+    $$\text{kalvium}_{100} = \text{attendanceScore} + \text{worklogScore} + \text{vivaScore}$$
+    $$\text{kalvium}_{70} = \text{kalvium}_{100} \times 0.70$$
+    $$\text{totalScore} = \min(100, \max(0, \text{Round}(\text{kalvium}_{70} + \text{uniVivaScore}))) \quad (\text{uniVivaScore} \in [0, 30])$$
 
 ---
 
@@ -215,6 +214,10 @@ flowchart TD
 | `#sem1SubjectsGrid`, `#sem2SubjectsGrid` | Subject grid for dropdowns |
 | `#sem3SubjectsContainer` | Subject grid for continuous assessment inputs |
 | `#currentSemLabel`, `#currentSemSgpaDisplay` | Top-right summary card for the currently active tab |
+| `#guidelinesModal` | Full-screen accessible modal dialog for worklog & journal form guidelines |
+| `#closeModalBtn`, `#modalGotItBtn` | Buttons to dismiss guidelines modal |
+| `#copyFilterBtn` | One-click clipboard copy button for email search filter query |
+| `.btn-open-guidelines` | Small `(i)` icon buttons in the subject header and input labels to open the full guidelines dialog |
 
 ---
 
@@ -233,9 +236,10 @@ flowchart TD
 
 | Scenario | Input Condition | Expected Behavior |
 | :--- | :--- | :--- |
-| **Empty Input** | `""` or whitespace | Treats field as unentered; does not contribute to earned or max weight. |
+| **Empty Subject Input** | All fields `""` or whitespace | Treats subject as unentered (`null`); displays `-` and does not add credits to SGPA. |
+| **Partial Subject Input** | 1 or more fields entered | Evaluates strictly for entered marks; unentered CAs/vivas default to 0 (no future projections). |
 | **Non-numeric Input** | Characters e.g. `"abc"` | `parseFloat()` returns `NaN`, input is ignored gracefully. |
-| **Out-of-bound Values** | Score $> 100$ or $< 0$ | Math functions clamp score strictly between `0` and `100`. |
-| **Partial Sprints** | 1 or 2 sprints entered without viva | Computes normalized percentage against 70% max weight, displays projected grade. |
-| **Zero Credits Entered** | No subjects selected | Displays `0.00` / `-` without triggering divide-by-zero errors. |
+| **Out-of-bound CA Values** | Marks $> 40$ (CA1-3) or $> 60$ (CA4-5) | Clamped strictly to respective limits `[0, 40]` and `[0, 60]`. |
+| **Out-of-bound Viva Values** | Marks $> 25$ (Kalvium Viva) or $> 30$ (Uni Viva) | Clamped strictly to `[0, 25]` and `[0, 30]`. |
+| **Zero Credits Entered** | No subjects selected/filled | Displays `0.00` / `-` without triggering divide-by-zero errors. |
 | **Quota Exceeded in Storage** | Private Browsing / Full Storage | `try-catch` block catches storage error and logs warning without breaking UI. |

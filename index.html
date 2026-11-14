@@ -25,8 +25,8 @@
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
         </div>
         <div>
-          <h1 class="brand-title">SGPA Calculator</h1>
-          <p class="brand-sub">Appox. SGPA Finder</p>
+          <h1 class="brand-title">SGPA & CGPA Calculator</h1>
+          <p class="brand-sub">Academic Performance Calculator</p>
         </div>
       </div>
 
@@ -89,6 +89,62 @@
         <div class="subjects-grid" id="sem3SubjectsContainer"></div>
       </section>
     </main>
+  </div>
+
+  <!-- Guidelines & Email Filter Modal Dialog -->
+  <div class="guidelines-modal-backdrop" id="guidelinesModal" hidden aria-hidden="true">
+    <div class="guidelines-modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="guidelines-modal-header">
+        <div class="modal-title-row">
+          <div class="modal-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+          </div>
+          <div>
+            <h3 id="modalTitle" class="guidelines-modal-title">Work & Journal Form Guidelines</h3>
+            <p class="modal-subtitle">Integrated Work with a Partner Company-I</p>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" id="closeModalBtn" aria-label="Close dialog">✕</button>
+      </div>
+
+      <div class="guidelines-modal-body">
+        <div class="modal-section">
+          <h4 class="modal-section-title">⏱️ Attendance Slot Counting:</h4>
+          <ul class="modal-list">
+            <li><strong>Simulated Work:</strong> <strong>3 hours</strong> a day count</li>
+            <li><strong>Internship:</strong> <strong>5 hours</strong> a day count</li>
+            <li><strong>Schedule:</strong> <strong>Monday to Friday only</strong> are counted (<span class="text-danger">Saturday & Sunday are excluded</span>)</li>
+          </ul>
+        </div>
+
+        <div class="modal-section">
+          <h4 class="modal-section-title">📝 Daily Worklog Journal Forms:</h4>
+          <ul class="modal-list">
+            <li><strong>Submissions:</strong> Exactly <strong>1 form per day</strong> is counted (Mon–Fri only).</li>
+            <li><strong>Easy Inbox Search:</strong> Copy this query into your Gmail / Outlook search bar to find every submitted response:</li>
+          </ul>
+          
+          <div class="modal-code-wrap">
+            <code id="modalFilterQuery" class="modal-filter-code">subject:Thanks for filling in this form: Simulated Work Daily Journal Form effective 13th March 2026</code>
+            <button type="button" id="copyFilterBtn" class="modal-copy-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span id="copyBtnText">Copy Query</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="guidelines-modal-footer">
+        <button type="button" class="btn-got-it" id="modalGotItBtn">Got it, close</button>
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>
