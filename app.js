@@ -56,7 +56,7 @@ const SEMESTER_DATA = {
     subjects: [
       { id: 'sem3_sub1', name: 'Object Oriented Programming', credits: 3, isSpecial: false },
       { id: 'sem3_sub2', name: 'Object Oriented Programming Laboratory', credits: 1, isSpecial: false },
-      { id: 'sem3_sub3', name: 'Database Management Systems', credits: 3, isSpecial: false },
+      { id: 'sem3_sub3', name: 'Database Management Systems', credits: 5, isSpecial: false },
       { id: 'sem3_sub4', name: 'Economics, Politics and Rural Society Development', credits: 3, isSpecial: false },
       { id: 'sem3_sub5', name: 'Integrated Work with a Partner Company-I', credits: 8, isSpecial: true },
       { id: 'sem3_sub6', name: 'Mathematical Thinking 101', credits: 4, isSpecial: false },
