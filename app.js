@@ -52,7 +52,7 @@ const SEMESTER_DATA = {
   },
   sem3: {
     name: 'Semester 3',
-    totalCredits: 22,
+    totalCredits: 24,
     subjects: [
       { id: 'sem3_sub1', name: 'Object Oriented Programming', credits: 3, isSpecial: false },
       { id: 'sem3_sub2', name: 'Object Oriented Programming Laboratory', credits: 1, isSpecial: false },
